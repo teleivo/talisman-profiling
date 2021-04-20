@@ -1,19 +1,28 @@
 package main
 
 import (
-	"fmt"
+	"flag"
 	"log"
+	"os"
 	"os/exec"
+	"runtime/pprof"
 	"strings"
-	"time"
 )
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
 func main() {
-	start := time.Now()
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	additions := GetAdditions(false)
 	_ = additions
-	elapsed := time.Since(start)
-	fmt.Printf("took %v to get all additions", elapsed)
 }
 
 type Addition struct {
