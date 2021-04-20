@@ -5,10 +5,15 @@ import (
 	"log"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 func main() {
-	fmt.Printf("%v\n", GetAdditions(false))
+	start := time.Now()
+	additions := GetAdditions(false)
+	_ = additions
+	elapsed := time.Since(start)
+	fmt.Printf("took %v to get all additions", elapsed)
 }
 
 type Addition struct {
