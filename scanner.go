@@ -25,7 +25,7 @@ func main() {
 	if *test {
 		blobsInCommitsSequential := getBlobsInCommitSequential(false)
 		blobsInCommits := getBlobsInCommit(false)
-		if diff := cmp.Diff(blobsInCommits, blobsInCommitsSequential); diff != "" {
+		if diff := cmp.Diff(&blobsInCommits, &blobsInCommitsSequential); diff != "" {
 			fmt.Println(fmt.Errorf("blobs mismatch (-want +got):\n%s", diff))
 			os.Exit(1)
 		}
@@ -64,7 +64,7 @@ func NewScannerAddition(filePath string, commits []string, content []byte) Addit
 
 // BlobsInCommits is a map of blob and list of the commits the blobs is present in.
 type BlobsInCommits struct {
-	commits map[string][]string
+	Commits map[string][]string
 }
 
 // GetAdditions will get all the additions for entire git history
@@ -78,12 +78,12 @@ func GetAdditions(ignoreHistory bool) []Addition {
 		blobsInCommits = getBlobsInCommit(ignoreHistory)
 	}
 	var additions []Addition
-	for blob := range blobsInCommits.commits {
+	for blob := range blobsInCommits.Commits {
 		objectDetails := strings.Split(blob, "\t")
 		objectHash := objectDetails[0]
 		data := getData(objectHash)
 		filePath := objectDetails[1]
-		newAddition := NewScannerAddition(filePath, blobsInCommits.commits[blob], data)
+		newAddition := NewScannerAddition(filePath, blobsInCommits.Commits[blob], data)
 		additions = append(additions, newAddition)
 	}
 	return additions
@@ -115,7 +115,7 @@ func getBlobsInCommitSequential(ignoreHistory bool) BlobsInCommits {
 				blobDetailsString := strings.Split(blob, " ")
 				blobDetails := strings.Split(blobDetailsString[2], "	")
 				blobHash := blobDetails[0] + "\t" + blobDetails[1]
-				blobsInCommits.commits[blobHash] = append(blobsInCommits.commits[blobHash], commit)
+				blobsInCommits.Commits[blobHash] = append(blobsInCommits.Commits[blobHash], commit)
 			}
 		}
 	}
@@ -152,7 +152,7 @@ func getBlobsFromChannel(blobsInCommits BlobsInCommits, result chan []string) {
 			blobDetailsString := strings.Split(blob, " ")
 			blobDetails := strings.Split(blobDetailsString[2], "	")
 			blobHash := blobDetails[0] + "\t" + blobDetails[1]
-			blobsInCommits.commits[blobHash] = append(blobsInCommits.commits[blobHash], commit)
+			blobsInCommits.Commits[blobHash] = append(blobsInCommits.Commits[blobHash], commit)
 		}
 	}
 }
@@ -176,5 +176,5 @@ func getData(objectHash string) []byte {
 
 func newBlobsInCommit() BlobsInCommits {
 	commits := make(map[string][]string)
-	return BlobsInCommits{commits: commits}
+	return BlobsInCommits{Commits: commits}
 }
