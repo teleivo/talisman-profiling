@@ -2,25 +2,45 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
-	"runtime/pprof"
 	"strings"
+
+	_ "net/http/pprof"
+
+	"github.com/google/go-cmp/cmp"
 )
 
-var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var test = flag.Bool("test", false, "compare result of sequential and concurrent approach")
+var sequential = flag.Bool("sequential", false, "get blobs in commits sequentially")
+
+// var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 func main() {
 	flag.Parse()
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
+	// To test that the sequential version gathers the same blobs in commits
+	if *test {
+		blobsInCommitsSequential := getBlobsInCommitSequential(false)
+		blobsInCommits := getBlobsInCommit(false)
+		if diff := cmp.Diff(blobsInCommits, blobsInCommitsSequential); diff != "" {
+			fmt.Println(fmt.Errorf("blobs mismatch (-want +got):\n%s", diff))
+			os.Exit(1)
 		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
+		os.Exit(0)
 	}
+
+	go http.ListenAndServe(":1234", nil)
+	// if *cpuprofile != "" {
+	// 	f, err := os.Create(*cpuprofile)
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// 	pprof.StartCPUProfile(f)
+	// 	defer pprof.StopCPUProfile()
+	// }
 	additions := GetAdditions(false)
 	_ = additions
 }
@@ -49,7 +69,14 @@ type BlobsInCommits struct {
 
 // GetAdditions will get all the additions for entire git history
 func GetAdditions(ignoreHistory bool) []Addition {
-	blobsInCommits := getBlobsInCommit(ignoreHistory)
+	// So that we can run the original version using goroutines and channels
+	// and the sequential one for comparison
+	var blobsInCommits BlobsInCommits
+	if *sequential {
+		blobsInCommits = getBlobsInCommitSequential(ignoreHistory)
+	} else {
+		blobsInCommits = getBlobsInCommit(ignoreHistory)
+	}
 	var additions []Addition
 	for blob := range blobsInCommits.commits {
 		objectDetails := strings.Split(blob, "\t")
@@ -60,6 +87,39 @@ func GetAdditions(ignoreHistory bool) []Addition {
 		additions = append(additions, newAddition)
 	}
 	return additions
+}
+
+func getBlobsInCommitSequential(ignoreHistory bool) BlobsInCommits {
+	commits := getAllCommits(ignoreHistory)
+	blobsInCommits := newBlobsInCommit()
+	blobsPerCommit := make([][]string, len(commits))
+	for _, commit := range commits {
+		if commit != "" {
+			blobDetailsBytes, _ := exec.Command("git", "ls-tree", "-r", commit).CombinedOutput()
+			blobDetailsList := strings.Split(string(blobDetailsBytes), "\n")
+			blobDetailsList = append(blobDetailsList, commit)
+			blobsPerCommit = append(blobsPerCommit, blobDetailsList)
+		}
+	}
+	for _, blobs := range blobsPerCommit {
+		if len(blobs) == 0 {
+			continue // needed since commits has an empty "" in its slice
+			// this guard clause is the equivalent of the i:=1 in
+			// for i := 1; i < len(commits); i++ {
+			// 	getBlobsFromChannel(blobsInCommits, result)
+			// }
+		}
+		commit := blobs[len(blobs)-1]
+		for _, blob := range blobs[:len(blobs)] {
+			if blob != "" && blob != commit {
+				blobDetailsString := strings.Split(blob, " ")
+				blobDetails := strings.Split(blobDetailsString[2], "	")
+				blobHash := blobDetails[0] + "\t" + blobDetails[1]
+				blobsInCommits.commits[blobHash] = append(blobsInCommits.commits[blobHash], commit)
+			}
+		}
+	}
+	return blobsInCommits
 }
 
 func getBlobsInCommit(ignoreHistory bool) BlobsInCommits {
