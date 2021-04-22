@@ -73,12 +73,13 @@ func GetAdditions(ignoreHistory bool) []Addition {
 	// and the sequential one for comparison
 	var blobsInCommits BlobsInCommits
 	if *sequential {
-		fmt.Println("Running sequential scan...")
+		fmt.Println("Gathering blobs in commits sequentially...")
 		blobsInCommits = getBlobsInCommitSequential(ignoreHistory)
 	} else {
-		fmt.Println("Running scan using goroutines and channels...")
+		fmt.Println("Gatherings blobs in commits using goroutines...")
 		blobsInCommits = getBlobsInCommit(ignoreHistory)
 	}
+	fmt.Println("Getting blob data and constructing additions...")
 	var additions []Addition
 	for blob := range blobsInCommits.Commits {
 		objectDetails := strings.Split(blob, "\t")
