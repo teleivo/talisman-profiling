@@ -296,6 +296,30 @@ git ls-tree -r 33ea58027b0a3ba160f7ac19d20568709f453f4d | dd
 98917 bytes (99 kB, 97 KiB)
 ```
 
+(alternatively use wc --bytes)
+
 both exceed the default of 65k
 
+To automate debugging when it occurs
+TODO the watch fails and does not retry when executing it before it happens
+
+```sh
+watch -n 0.1 "ps --ppid $(pgrep talisman) -F"
+ps --ppid $(pgrep talisman) -F
+ps --no-header -o pid --ppid $(pgrep blocked-write) | xargs -I_ cat /proc/_/io
+strace -s 1000000000 -p $(ps --ppid $(pgrep blocked-write) -o pid --no-headers)
+ps -To pid,tid,tgid,tty,time,comm -p $(pgrep talisman) | wc -l # to see how
+many threads are created by it
+```
+
 Can I write an even simpler go program to replicate this error?
+Yes => blocked-write
+I can see it happening every few tries when creating 1000 goroutines.
+
+number of bytes per tree of every commit
+
+```sh
+git --no-pager log --all --pretty=%H | xargs -I_ sh -c "git ls-tree -r _ | wc --bytes"
+```
+
+run these on talisman and bookkeeper to compare them
